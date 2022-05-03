@@ -1,0 +1,18 @@
+Package: extendedglmnet
+Type: Package
+Title: Extension of LM and GLM with Random Lasso
+Version: 0.1.0
+Author: Weiwei Tao
+Maintainer: Weiwei Tao <tww101928@gmail.com>
+Description: Extremely efficient procedures for fitting the entire lasso, ridge or random lasso regularization for linear regression and logistic regression models. The package supports both continuous and binary response variables. This package supports random lasso method which has been reported to be able to alleviate the limitations of lasso and ridge where highly correlated variables tend to be selected and removed altogether.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.1.2
+Imports: 
+    glmnet,
+    methods
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

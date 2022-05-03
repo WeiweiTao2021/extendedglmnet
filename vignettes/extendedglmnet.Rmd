@@ -1,0 +1,216 @@
+---
+title: "An Introduction to `extenedglmnet`"
+author: Weiwei Tao
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{An Introduction to glmnet}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+## Introduction
+
+extendedglmnet package is an extension of glmnet package. Users can either fit a linear model or generalized linear model depending the response variable types. It can support ridge, lasso and random lasso methods. User can choose to use cross validation to find the optimal regularization parameter lambda or use user specified lambda. It can deal with both continuous and binary responses. The package includes methods for prediction and print, and evalution.
+
+The authors of extendedglmnet is Weiwei Tao. This vignette describes basic usage of extendedglmnet in R. 
+
+Lasso and ridge regulation are known to be suffering from that it can select only one or a few of a set of highly correlated important variables. If several independent data sets were generated from the same distribution, then we would expect lasso to select nonidentical subsets of those highly correlated important variables from different data sets. Random Lasso proposed by Sijian Wang et al. solved this issue by using bootstrap, which will provide more stable results than lasso and ridge when number of predictors are greater than number of observations. Random lasso algorithm is a two-step approach including:
+  - step1: the lasso method is applied to many bootstrap samples, each using a set of randomly selected covariates. A measure of importance is yielded from this step for each covariate.
+  - step2: a similar procedure to the first step is implemented with the exception that for each bootstrap sample, a subset of covariates is randomly selected with unequal selection probabil- ities determined by the covariates’ importance. The final set of covariates and their coefficients are determined by averaging boot- strap results obtained from step 2. 
+
+## Installation
+
+Like many other R packages, the simplest way to obtain `extendedglmnet` is to install it directly from CRAN. Type the following command in R console:
+
+```{r, eval=FALSE}
+install.packages("extendedglmnet")
+```
+
+
+## Quick Start
+
+The purpose of this section is to give users a general sense of the package. We will briefly go over the main functions, basic operations and outputs. After this section, users may have a better idea of what functions are available, which ones to use, or at least where to seek help.
+
+First, we load the `extendedglmnet` package:
+```{r}
+library(extendedglmnet)
+```
+
+The default family used in the package is the Guassian linear model or "least squares", which we will demonstrate in this section. We generate data sample as following:
+```{r}
+size = 50
+x = matrix(runif(55*size),ncol=55)
+y = 10*x[,1] + 3*x[,2] + 20*(x[,3]-0.5)**2 + 10*x[,4] + 5*x[,35] + runif(1,0,1)
+```
+
+We split the data into training set and testing set with ratio of 7:3.
+```{r}
+index = sample(1:size, 0.7*size)
+trainx = x[index,]
+testx = x[-index,]
+trainy = y[index]
+testy = y[-index]
+```
+
+
+## Linear Regression: `family = "gaussian", type = "regression"` (default)
+
+`"gaussian"` is the default `family` argument for the function `extendedglmnet`. We can fit the model using:
+```{r}
+fit.lr<- extendedglmnet(trainx, trainy, family = "gaussian", type = "regression")
+```
+`fit` is a list that contains all the relevant information of the fitted model for further use including type of the fit, family, coefficient of the model, lambda (0 for regression without regulations), degree of freedom (number of non-zero coefficients), number of observations and number of covariates in the input matrix x. Two methods are provided for the object such as `print.extendglmnet, and `, `predict.extendglmnet` that enable us to explore the results elegantly.
+
+We can visualize the fitted results by `print.extendglmnet` method:
+```{r}
+print.extendglmnet(fit.lr)
+```
+
+The training dataset contains 35 observations and 55 potential predictors. The number of predictors are greater than number of obervations. Traditional linear regression will automatically assign NA values to the last 20 covariates.
+
+We can predict responses based upon new data we have. 
+```{r}
+ypred <- predict.extendglmnet(fit.lr, newx = testx, type = "response")
+```
+
+The results may be misleading due to rank-deficient issue. We can also perform model evaluation by calculating MSE, RMSE, MAE for continuous responses.
+```{r}
+evaluation(testy, ypred, "MSE")
+evaluation(testy, ypred, "RMSE")
+evaluation(testy, ypred, "MAE")
+```
+## Ridge/Lasso Regression: `family = "gaussian", type = "ridge" or "lasso"`
+
+We can also choose to fit our model with either ridge or lasso regulations by changing type assigned.
+```{r}
+fit.ridge<- extendedglmnet(trainx, trainy, family = "gaussian", type = "ridge")
+print.extendglmnet(fit.ridge)
+```
+
+Similarly, we can predict responses based upon new testing data we have. 
+```{r}
+ypred <- predict.extendglmnet(fit.ridge, newx = testx, type = "response")
+```
+The MSE by using ridge regression is much smaller than that using linear regression without regulation.
+```{r}
+evaluation(testy, ypred, "MSE")
+evaluation(testy, ypred, "RMSE")
+evaluation(testy, ypred, "MAE")
+```
+The MSE with lasso is the smallest as comparing to Ridge and linear regression.
+```{r}
+fit.lasso<- extendedglmnet(trainx, trainy, family = "gaussian", type = "lasso")
+
+ypred <- predict.extendglmnet(fit.lasso, newx = testx, type = "response")
+evaluation(testy, ypred, "MSE")
+evaluation(testy, ypred, "RMSE")
+evaluation(testy, ypred, "MAE")
+```
+
+### function arguments for choice of lambdas
+
+`extendedglmnet` provides various arguments for users to customize the cross validation process during the fit.
+
+* `cv` is an indicator variable to specify whether cross validation should be used to pick optimal lambda value. Default is TRUE.
+
+* `lambda` 	A user supplied lambda sequence. Typical usage is to have the program compute its own lambda sequence with default values in glmnet package. Supplying a value of lambda overrides this.
+
+* `nfolds` number of folds - default is 5. Although nfolds can be as large as the sample size (leave-one-out CV), it is not recommended for large datasets. Smallest value allowable is nfolds = 3.
+
+As an example, we can specify user defined range of lambdas during the cross validation process of the fit.
+```{r}
+grid=10^seq(6,-2,length=10)
+fit.lasso<- extendedglmnet(trainx, trainy, family = "gaussian", type = "lasso", lambda = grid)
+
+ypred <- predict.extendglmnet(fit.lasso, newx = testx, type = "response")
+evaluation(testy, ypred, "MSE")
+```
+
+## Random Lasso Method: `family = "gaussian", type = "random lasso"`
+So far, what we have introduced were the same as what provided in the glmnet package. An important feature in extendedglmnet package is that it provide use the choice of random lasso method which can provide more stable fitting results.
+
+For random lasso method, 3 additional parameters need to specified: 
+* `B` number of bootstrap samples in random lasso. One can take B = 500 or B = 1000. The default is 200. A large B can make computation time much longer.
+
+* `q1` and `q2` number of candidate variables to be included in each bootstrap sample during generating importance measures in random lasso. This value need to be tuned to ensure best performance. The value should be positive and no greater than number of predictors in x.
+
+We leave B as the default of 200 and choose q1 and q2 to be 30.
+
+```{r}
+fit.rl<- extendedglmnet(trainx, trainy, family = "gaussian", type = "random lasso", q1 = 30, q2 = 30)
+print.extendglmnet(fit.rl)
+```
+The MSE with random lasso is comparable to that of lasso.
+```{r}
+ypred <- predict.extendglmnet(fit.rl, newx = testx, type = "response")
+evaluation(testy, ypred, "MSE")
+evaluation(testy, ypred, "RMSE")
+evaluation(testy, ypred, "MAE")
+```
+## Logistic Regression: `family = "binomial", type = "regression"` 
+extendedglmnet package supports binomial responses as well. Similarly we generated a simulated dataset and first apply logistic regression to that dataset.
+
+```{r}
+size = 200
+x = matrix(rnorm(210*size),ncol=210)
+z = 1 + 2*x[,1] + 3*x[,40] - 4*x[,50] + 3*x[,210]
+pr = 1/(1+exp(-z))
+y = rbinom(size,1,pr)
+
+index = sample(1:size, 0.7*size)
+trainx = x[index,]
+testx = x[-index,]
+trainy = y[index]
+testy = y[-index]
+```
+For binary responses, we need simply change family argument from "gaussian" to "binomial". 
+```{r}
+fit.logistic<- extendedglmnet(trainx, trainy, family = "binomial", type = "regression")
+print.extendglmnet(fit.logistic)
+ypred <- predict.extendglmnet(fit.logistic, newx = testx, family = "binomial", type = "class")
+evaluation(testy, ypred, "accuracy")
+```
+
+### Predicting with `extendedglmnet` objects for binary responses
+For binary responses, three types of predictions are available. Type "link" gives the linear predictors for "binomial" models. Type "response" gives the fitted probabilities. Type "class" applies only to "binomial" models, and produces the class label corresponding to the maximum probability. If no levels argument were specifies, the class will be labeled as 0 or 1 classes.
+
+```{r}
+ypred <- predict.extendglmnet(fit.logistic, newx = testx, family = "binomial", type = "link")
+t(ypred)
+```
+
+```{r}
+ypred <- predict.extendglmnet(fit.logistic, newx = testx, family = "binomial", type = "response")
+t(ypred)
+```
+## Regression with regulations: `family = "binomial", type = "lasso" or "ridge"` 
+Similarly, we can apply logistic regression with ridge or lasso regulations to the same dataset. The prediciton accuracy is the highest with lasso (0.87), following that with ridge regulation (0.75) and is the lowest for model without regulation (0.38).
+```{r}
+fit.ridge<- extendedglmnet(trainx, trainy, family = "binomial", type = "ridge")
+ypred <- predict.extendglmnet(fit.ridge, newx = testx, family = "binomial", type = "class")
+evaluation(testy, ypred, "accuracy")
+```
+
+```{r}
+fit.lasso<- extendedglmnet(trainx, trainy, family = "binomial", type = "lasso")
+ypred <- predict.extendglmnet(fit.lasso, newx = testx, family = "binomial", type = "class")
+evaluation(testy, ypred, "accuracy")
+```
+
+## Random Lasso: `family = "binomial", type = "random lasso"` 
+We tested random lasso model to the same dataset as well. q1 and q2 are set to be 150. The prediction is the highest with random lasso which is 0.9.
+
+```{r}
+fit.rl<- extendedglmnet(trainx, trainy, family = "binomial", type = "random lasso")
+ypred <- predict.extendglmnet(fit.rl, newx = testx, family = "binomial", type = "class")
+evaluation(testy, ypred, "accuracy")
+```
+
+## References
+ * Wang, S., Nan, B., Rosset, S., & Zhu, J. (2011). Random lasso, The annals of applied statistics, 5(1), 468.
+
+ * Friedman J, Hastie T, Tibshirani R (2010). Regularization Paths for Generalized Linear Models via Coordinate Descent. Journal of Statistical Software, 33(1), 1–22. doi: 10.18637/jss.v033.i01, https://www.jstatsoft.org/v33/i01/.
